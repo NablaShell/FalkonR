@@ -31,10 +31,6 @@ impl<W: Write> ChunkedWriter<W> {
         })
     }
 
-    pub fn total_written(&self) -> u64 {
-        self.total
-    }
-
     fn flush_chunk(&mut self) -> io::Result<()> {
         if self.buf.is_empty() {
             return Ok(());

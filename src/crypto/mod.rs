@@ -8,6 +8,12 @@ use zeroize::Zeroize;
 
 pub struct SecureBytes(Vec<u8>);
 
+impl Clone for SecureBytes {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
 impl SecureBytes {
     pub fn as_slice(&self) -> &[u8] {
         &self.0

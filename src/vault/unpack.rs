@@ -1,11 +1,12 @@
+use std::fs::File;
 use std::io::{Cursor, Read, Write};
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
-use tokio::fs;
 
 use crate::compress;
 use crate::crypto::{self, ChunkedReader, SecureBytes};
+use crate::progress::ProgressReader;
 use crate::vault::format::*;
 
 pub const DURESS_ERR: &str = "DURESS";
@@ -15,10 +16,10 @@ enum SlotKind {
     Duress,
 }
 
-/// Returns:
-///   Ok(Some(Real))    — key подходит, это реальный слот
-///   Ok(Some(Duress))  — key подходит, это duress-слот
-///   Ok(None)          — key не подходит
+/// Пробуем расшифровать начало слота и понять, что это:
+///   Ok(Some(Real))    — ключ подошёл, реальный архив
+///   Ok(Some(Duress))  — ключ подошёл, duress-слот
+///   Ok(None)          — ключ не подошёл
 fn classify_slot(slot_bytes: &[u8], key: &[u8; crypto::KEY_SIZE]) -> Result<Option<SlotKind>> {
     let cursor = Cursor::new(slot_bytes);
     let chunked = ChunkedReader::new(cursor, key)?;
@@ -38,16 +39,33 @@ pub async fn unpack(vault_path: &str, target_dir: &str, password: &SecureBytes) 
         bail!("vault path must not contain '..'");
     }
 
-    let data = fs::read(vault_path)
-        .await
-        .with_context(|| format!("read vault {vault_path}"))?;
+    let vault_path_owned = vault_path.to_string();
+    let target_owned = target_dir.to_string();
+    let password_owned = password.clone();
 
-    if data.len() < HEADER_SIZE {
-        bail!("vault too short");
-    }
-    let magic = u32::from_be_bytes([data[0], data[1], data[2], data[3]]);
-    let version = u16::from_be_bytes([data[4], data[5]]);
-    let slot_count = data[6];
+    tokio::task::spawn_blocking(move || {
+        unpack_blocking(&vault_path_owned, &target_owned, &password_owned)
+    })
+    .await
+    .context("unpack task panicked")?
+}
+
+fn unpack_blocking(vault_path: &str, target_dir: &str, password: &SecureBytes) -> Result<()> {
+    let file = File::open(vault_path).with_context(|| format!("open vault {vault_path}"))?;
+    let total = file
+        .metadata()
+        .with_context(|| format!("stat vault {vault_path}"))?
+        .len();
+
+    let mut reader = ProgressReader::new(file, total, "Unpacking");
+
+    // ---- Header ----
+    let mut hdr = [0u8; HEADER_SIZE];
+    reader.read_exact(&mut hdr).context("read vault header")?;
+
+    let magic = u32::from_be_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]);
+    let version = u16::from_be_bytes([hdr[4], hdr[5]]);
+    let slot_count = hdr[6];
 
     if magic != MAGIC_VAULT {
         bail!("bad magic");
@@ -59,42 +77,59 @@ pub async fn unpack(vault_path: &str, target_dir: &str, password: &SecureBytes) 
         bail!("bad slot count {slot_count}");
     }
 
-    let mut off = HEADER_SIZE;
+    // ---- Slots ----
+    let mut last_err: Option<anyhow::Error> = None;
 
     for idx in 0..slot_count {
-        if off + crypto::SALT_SIZE + 8 > data.len() {
-            bail!("truncated slot header at slot {idx}");
-        }
-
         let mut salt = [0u8; crypto::SALT_SIZE];
-        salt.copy_from_slice(&data[off..off + crypto::SALT_SIZE]);
-        off += crypto::SALT_SIZE;
-
-        let slot_len = u64::from_be_bytes(data[off..off + 8].try_into().unwrap()) as usize;
-        off += 8;
-
-        if off + slot_len > data.len() {
-            bail!("truncated slot body at slot {idx}");
+        if let Err(e) = reader.read_exact(&mut salt) {
+            bail!("truncated slot {idx} header: {e}");
         }
-        let slot_bytes = &data[off..off + slot_len];
-        off += slot_len;
+
+        let mut len_buf = [0u8; 8];
+        if let Err(e) = reader.read_exact(&mut len_buf) {
+            bail!("truncated slot {idx} length: {e}");
+        }
+        let slot_len = u64::from_be_bytes(len_buf) as usize;
+
+        let mut slot_bytes = vec![0u8; slot_len];
+        if let Err(e) = reader.read_exact(&mut slot_bytes) {
+            bail!("truncated slot {idx} body: {e}");
+        }
 
         let key = crypto::derive_key(password.as_slice(), &salt)?;
 
-        match classify_slot(slot_bytes, &key)? {
-            Some(SlotKind::Duress) => {
+        match classify_slot(&slot_bytes, &key) {
+            Ok(Some(SlotKind::Duress)) => {
+                reader.finish();
                 return Err(anyhow::anyhow!(DURESS_ERR));
             }
-            Some(SlotKind::Real) => {
+            Ok(Some(SlotKind::Real)) => {
                 let cursor = Cursor::new(slot_bytes);
                 let chunked = ChunkedReader::new(cursor, &key)?;
                 let dec = compress::decompress(chunked)?;
-                return restore_stream(dec, target_dir);
+                let res = restore_stream(dec, target_dir);
+                reader.finish();
+                return res;
             }
-            None => continue,
+            Ok(None) => {
+                // ключ не подошёл к этому слоту — идём к следующему
+                last_err = None;
+                continue;
+            }
+            Err(e) => {
+                // слот повреждён/не расшифровывается — запоминаем и идём дальше
+                last_err = Some(e);
+                continue;
+            }
         }
     }
 
+    reader.finish();
+
+    if let Some(e) = last_err {
+        return Err(e.context("no slot could be decrypted"));
+    }
     bail!("wrong password");
 }
 
