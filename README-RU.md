@@ -483,4 +483,4 @@ libc              mlock, munlock (unix only)
 
 ## Лицензия
 
-См. `LICENSE` в корне репозитория.
+Apache-2.0
