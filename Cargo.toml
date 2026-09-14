@@ -1,9 +1,9 @@
 [package]
 name = "FalkonR"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 authors = ["NablaShell <nablashell@gmail.com>"]
-description = "FalkonR seals a directory into a single vault file, then wipes the source. It can also restore a vault back to disk. It supports an optional duress password: entering it on unlock destroys the vault instead of restoring it."
+description = "FalkonR v1.0.0 Snow Leopard, seals a directory into a single vault file, then wipes the source. It can also restore a vault back to disk. It supports an optional duress password: entering it on unlock destroys the vault instead of restoring it."
 license = "Apache-2.0"
 repository = "https://github.com/NablaShell/FalkonR" 
 readme = "README.md"
