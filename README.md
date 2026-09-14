@@ -17,12 +17,10 @@ Built with:
 - **indicatif** — progress bars on stderr
 - **rpassword** — hidden password input
 
-```
-```
 
-FalkonR --lock <dir>     Seal a directory into a vault
-FalkonR --unlock <file>  Restore a vault
-
+```
+falkonr -l <dir>     Seal a directory into a vault
+falkonr -u <file>  Restore a vault
 ```
 
 ## Table of contents
@@ -63,7 +61,7 @@ Confirm duress:
 Restore a vault:
 
 ```
-FalkonR --unlock ./mydir.bak
+falkonr --unlock ./mydir.bak
 ```
 
 Restore writes the vault's root directory into the current working directory.
@@ -72,13 +70,13 @@ Restore writes the vault's root directory into the current working directory.
 
 | Flag | Short | Meaning |
 |------|-------|---------|
-| `--lock <DIR>`     |        | Seal the given directory into a vault |
-| `--unlock <FILE>`  |        | Restore the given vault |
+| `--lock <DIR>`     | `-l`   | Seal the given directory into a vault |
+| `--unlock <FILE>`  | `-u`   | Restore the given vault |
 | `--output <PATH>`  | `-o`   | Output vault path (default: `vault.bak`) |
 | `--verbose`        | `-v`   | Reserved for future verbose logging |
 | `--help`           | `-h`   | Show help |
 
-Exactly one of `--lock` or `--unlock` must be given.
+Exactly one of `-l` or `-u` must be given.
 
 ## Duress password
 
@@ -398,13 +396,13 @@ cargo build --release
 The binary is produced at:
 
 ```
-target/release/FalkonR
+target/release/falkonr
 ```
 
 To strip it:
 
 ```
-strip target/release/FalkonR
+strip target/release/falkonr
 ```
 
 ## License
