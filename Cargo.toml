@@ -1,0 +1,37 @@
+[package]
+name = "FalkonR"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "falkonr"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1.40", features = ["full"] }
+rayon = "1.10"
+clap = { version = "4.5", features = ["derive"] }
+
+# crypto
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
+sha2 = "0.10"
+rand = "0.8"
+zeroize = { version = "1.8", features = ["derive"] }
+
+# compression
+zstd = "0.13"
+
+# terminal / io
+rpassword = "7.3"
+dialoguer = "0.11"
+indicatif = "0.17"
+console = "0.15"
+
+# fs / misc
+walkdir = "2.5"
+thiserror = "1.0"
+anyhow = "1.0"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
