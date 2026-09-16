@@ -3,12 +3,19 @@ use std::io::{Seek, SeekFrom, Write};
 use anyhow::{Context, Result, bail};
 use rand::RngCore;
 use walkdir::WalkDir;
+use std::path::{Component, Path};
+
+fn is_safe_path(path: &str) -> bool {
+    Path::new(path)
+        .components()
+        .all(|c| !matches!(c, Component::ParentDir))
+}
 
 pub async fn file(path: &str) -> Result<()> {
-    if path.contains("..") {
-        bail!("path must not contain '..'");
+    if !is_safe_path(path) {
+        bail!("path contains '..' component: {path}");
     }
-
+    
     let md = tokio::fs::metadata(path).await?;
     let size = md.len();
 

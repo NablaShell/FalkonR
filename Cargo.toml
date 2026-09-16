@@ -1,6 +1,6 @@
 [package]
 name = "FalkonR"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 authors = ["NablaShell <nablashell@gmail.com>"]
 description = "FalkonR v1.0.0 Snow Leopard, seals a directory into a single vault file, then wipes the source. It can also restore a vault back to disk. It supports an optional duress password: entering it on unlock destroys the vault instead of restoring it."
